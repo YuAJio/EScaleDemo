@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/tv_WeightNum"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:gravity="center"
+        android:textColor="#FF66CCFF"
+        android:textSize="56sp"
+        app:layout_constraintHeight_percent="0.2"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintWidth_percent="0.3" />
+
+    <FrameLayout
+        android:id="@+id/fl_CameraCarrier"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintHeight_percent="0.4"
+        app:layout_constraintStart_toEndOf="@id/tv_WeightNum"
+        app:layout_constraintTop_toTopOf="@id/tv_WeightNum"
+        app:layout_constraintWidth_percent="0.4" />
+
+    <Button
+        android:id="@+id/bt_TurnOn"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:text="打开闪光灯"
+        app:layout_constraintEnd_toStartOf="@+id/bt_TurnOff"
+        app:layout_constraintHeight_percent="0.1"
+        app:layout_constraintStart_toStartOf="@id/fl_CameraCarrier"
+        app:layout_constraintTop_toBottomOf="@id/fl_CameraCarrier" />
+
+    <Button
+        android:id="@+id/bt_TurnOff"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:text="关闭闪光灯"
+        app:layout_constraintBottom_toBottomOf="@id/bt_TurnOn"
+        app:layout_constraintEnd_toEndOf="@id/fl_CameraCarrier"
+        app:layout_constraintStart_toEndOf="@id/bt_TurnOn"
+        app:layout_constraintTop_toBottomOf="@id/fl_CameraCarrier" />
+
+
+</android.support.constraint.ConstraintLayout>
