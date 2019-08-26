@@ -40,8 +40,6 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView tv_Weight;
     private FrameLayout fl_CC;
-    private Button bt_TIOn;
-    private Button bt_TIOff;
 
     /**
      * 初始化控件
@@ -49,8 +47,8 @@ public class MainActivity extends AppCompatActivity {
     private void InitView() {
         tv_Weight = findViewById(R.id.tv_WeightNum);
         fl_CC = findViewById(R.id.fl_CameraCarrier);
-        bt_TIOff = findViewById(R.id.bt_TurnOff);
-        bt_TIOn = findViewById(R.id.bt_TurnOn);
+        Button bt_TIOff = findViewById(R.id.bt_TurnOff);
+        Button bt_TIOn = findViewById(R.id.bt_TurnOn);
 
         bt_TIOn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -64,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
                 OnclickEvent(v.getId());
             }
         });
+
     }
 
     /**
@@ -154,12 +153,14 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void ReceiveData(final EScaleData eScaleData) {
-//            runOnUiThread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    tv_Loader.setText(String.valueOf(eScaleData.Weight));
-//                }
-//            });
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    //接收的重量 单位为g
+                    String showWeight = String.valueOf(eScaleData.Weight + "g");
+                    tv_Loader.setText(showWeight);
+                }
+            });
         }
 
     }
