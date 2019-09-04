@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -14,22 +15,24 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.example.estestsdk.EScaleManager;
-import com.example.estestsdk.MsCameraSurfaceView;
-import com.example.estestsdk.boradcastes.UsbCameraBroadcastReceiver;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.mysafe.esdemo.Boradcastes.UsbCameraBroadcastReceiver;
+import com.mysafe.esdemo.Interfaces.IUsbCameraStateCallBck;
 
 import java.io.File;
 
-import Beans.EScaleData;
-import Beans.SensorDeviceParmas;
-import Beans.SensorDeviceParmasDetail;
-import Utils.AndroidPreferenceProvider;
-import Utils.FilePathManager;
-import Utils.LocalFileUtil;
+import CupCake.EScaleController;
+import CupCake.Enums.CameraInitState;
+import CupCake.Enums.InitStateCode;
+import CupCake.Enums.TakePictureResult;
+import CupCake.Interfaces.IMsUsbCameraCallBack;
+import CupCake.Interfaces.IMsUsbCameraStateCallBack;
+import CupCake.Interfaces.IWeightingDataReceiver;
+import CupCake.Moudle.EScaleData;
+import CupCake.Views.MsCameraSurfaceView;
 
-public class MainActivity extends AppCompatActivity implements UsbCameraBroadcastReceiver.IUsbCameraStateCallBck, MsCameraSurfaceView.IMCSV_CallBack {
+public class MainActivity extends AppCompatActivity implements IUsbCameraStateCallBck, IMsUsbCameraCallBack {
 
     private static final String SpProjectCode = "ESCaleDemo";
 
@@ -38,18 +41,14 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //初始化SDK中的文件管理模块
-        FilePathManager.GetInstance().Init(this);
-        //初始化SDK中的Sp模块
-        AndroidPreferenceProvider.GetInstance().Init(this, SpProjectCode);
-        ///初始化的操作都可放在Application中
-
-        //定义SDK中的Sp存储区域代号*必须*
-        EScaleManager.GetInstance().SetSpAuthKey(SpProjectCode);
+        //对SDK进行初始化
+        InitStateCode initCode = EScaleController.GetInstance().Init(this, SpProjectCode);
+        if (initCode != InitStateCode.Succeed)
+            //如果初始化失败,则可能无法正常获取称重重量
+            Log.e("初始化错误码", initCode.toString());
 
         InitView();
-
-        InitSDKManager();
+//        InitSDKManager();
     }
 
     private TextView tv_Weight;
@@ -86,27 +85,17 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
 
     }
 
-    /**
-     * 初始化SDK的管理器
-     */
-    private void InitSDKManager() {
-        //检查称重参数是否初始化完成
-        boolean isInit = CheckInitFinished();
-        if (isInit) {
-            //创建接受称重数据实例
-            WeightDataInvoke invoke = new WeightDataInvoke(this, tv_Weight);
-            //设置接收传感器参数的实现接口类
-            EScaleManager.GetInstance().SetInterface(invoke);
-            //重置参数
-            EScaleManager.GetInstance().ResetParams();
-            //初始化称重接收器,开始接收数据
-            EScaleManager.GetInstance().InitSerialPort();
-        } else {
-            //出现未初始化的情况时
-            //请先返回OS页面初始化传感器
-            Log.i("Info", "称重参数未初始化");
-        }
 
+    /**
+     * 打开串口,并接收传感器数据
+     */
+    private void OpenAndReceiveWeightingData() {
+        //创建接受称重数据实例
+        WeightDataInvoke invoke = new WeightDataInvoke(this, tv_Weight);
+        //设置接收传感器参数的实现接口类
+        EScaleController.GetInstance().SetWeightingReceiver(invoke);
+        //打开传感器串口(参数为设置接收传感器参数的实现接口类,若以实现 则可传null)
+        EScaleController.GetInstance().OpenSensor(null);
     }
 
     /**
@@ -117,11 +106,11 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
     private void OnclickEvent(int id) {
         switch (id) {
             case R.id.bt_TurnOn: {//打开闪光灯
-                EScaleManager.GetInstance().FlashLight_TurnItOn();
+                EScaleController.GetInstance().FlashLight_TurnItOn();
             }
             break;
             case R.id.bt_TurnOff: {//关闭闪光灯
-                EScaleManager.GetInstance().FlashLight_TurnItOff();
+                EScaleController.GetInstance().FlashLight_TurnItOff();
             }
             break;
             case R.id.bt_TakeAShot: {//拍一张照
@@ -130,35 +119,6 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
             }
             break;
         }
-    }
-
-    /**
-     * 检查本地参数文件是否完整
-     */
-    private boolean CheckInitFinished() {
-        //获取本地称重参数保存文件
-        SensorDeviceParmas esParams = LocalFileUtil.GetOneAndOnlySensorParams();
-        if (esParams == null)
-            return false;
-        //初始化Gson
-        GsonBuilder builder = new GsonBuilder();
-        Gson gson = builder.create();
-
-        //检测是否在本地和SP中都已初始化
-        SensorDeviceParmasDetail esParamsObject = esParams.getDetail().equals("") ? null : gson.fromJson(esParams.getDetail(), SensorDeviceParmasDetail.class);
-        boolean b1 = esParamsObject != null && (esParamsObject.isInit() && (esParamsObject.getJingdu() > 0));
-        boolean b2 = AndroidPreferenceProvider.GetInstance().GetBoolean("EInitFinished", SpProjectCode);
-        boolean b = b2 || b1;
-        if (b1 && !b2) {
-            //如果本地初始化成功但SP未正常初始化
-            EScaleManager.GetInstance().InitOutPutStable(true);
-            EScaleManager.GetInstance().InitZeroValue(esParamsObject.ZeroPoint);
-            EScaleManager.GetInstance().InitMaxWeight(esParamsObject.MaxWeight);
-            EScaleManager.GetInstance().InitJingdu(esParamsObject.Jingdu);
-            AndroidPreferenceProvider.GetInstance().PutFloat("EJingduPerAd", esParamsObject.JingduAD, SpProjectCode);
-            AndroidPreferenceProvider.GetInstance().PutBoolean("EInitFinished", true, SpProjectCode);
-        }
-        return b;
     }
 
     //region 摄像头相关
@@ -226,13 +186,31 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
     private String GetPhotoPath() {
         //获取的地址在存储中Android.data.包名中
         String cachePath =
-                FilePathManager.GetInstance().GetPrivateRootDirPath()
+                Environment.getExternalStorageDirectory().getAbsolutePath()
                         + "/"
                         + "TestImageDir"
                         + "/";
-        FilePathManager.GetInstance().CreateDir(cachePath);
-        return Combine(cachePath, "TestPic.jpg");
+        if (CreateDir(cachePath)) {
+            return Combine(cachePath, "TestPic.jpg");
+        }
+        return "";
     }
+
+    /**
+     * 创建文件夹
+     *
+     * @param path
+     * @return
+     */
+    private boolean CreateDir(String path) {
+        try {
+            File dir = new File(path);
+            return dir.mkdirs();
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
 
     /**
      * 组装地址
@@ -249,11 +227,11 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
 
 
     /**
-     * @param takePictureResult
+     * @param result
      */
     @Override
-    public void TakePictureResultAction(MsCameraSurfaceView.TakePictureResult takePictureResult) {
-        switch (takePictureResult) {
+    public void TakePictureResultAction(TakePictureResult result) {
+        switch (result) {
             case None:
                 break;
             case Fail: {
@@ -282,8 +260,8 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
     }
 
     @Override
-    public void CameraInitStateAction(MsCameraSurfaceView.CameraInitState cameraInitState) {
-        switch (cameraInitState) {
+    public void CameraInitStateAction(CameraInitState state) {
+        switch (state) {
             case Fail: {
                 //摄像头挂载失败
                 isOpenCamera = false;
@@ -311,14 +289,17 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
         super.onResume();
         RegisterUsbCameraBroadcastReceiver();
         HandleCheckCamera();
+        OpenAndReceiveWeightingData();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         //关闭接收端口
-        EScaleManager.GetInstance().CloseSerialPort();
+        EScaleController.GetInstance().CloseSensor();
         UnRegisterUsbCameraBroadcastReceiver();
+        //关闭传感器端口
+        EScaleController.GetInstance().CloseSensor();
     }
     //endregion
 
@@ -327,7 +308,7 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
     /**
      * 传感器数据接受实现类
      */
-    private class WeightDataInvoke implements EScaleManager.IEsCaleDateReceive {
+    private class WeightDataInvoke implements IWeightingDataReceiver {
         private Context context;
         private TextView tv_Loader;
 
@@ -351,7 +332,6 @@ public class MainActivity extends AppCompatActivity implements UsbCameraBroadcas
                 }
             });
         }
-
     }
     //endregion
 }
