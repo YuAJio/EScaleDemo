@@ -96,6 +96,8 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         EScaleController.GetInstance().SetWeightingReceiver(invoke);
         //打开传感器串口(参数为设置接收传感器参数的实现接口类,若以实现 则可传null)
         EScaleController.GetInstance().OpenSensor(null);
+
+        EScaleController.GetInstance().GetZeroWeight();
     }
 
     /**
@@ -145,7 +147,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
      * 挂载以及初始化摄像头
      */
     private void HandleCheckCamera() {
-        if (this.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA)) {
+        if (this.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
             if (iv_Camera != null) {
                 iv_Camera.CleanMCSV_CallBack();
                 fl_CC.removeAllViews();
