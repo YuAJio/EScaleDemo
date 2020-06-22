@@ -1,12 +1,18 @@
 package com.mysafe.esdemo;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Environment;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.BoringLayout;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,20 +42,35 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
     private static final String SpProjectCode = "ESCaleDemo";
 
+    private Boolean isInitFinish = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //对SDK进行初始化
-        InitStateCode initCode = EScaleController.GetInstance().Init(this, SpProjectCode);
-        if (initCode != InitStateCode.Succeed)
-            //如果初始化失败,则可能无法正常获取称重重量
-            Log.e("初始化错误码", initCode.toString());
+        //检测是否开启对应权限
+        if (IsThatPermissionsOn(true, Manifest.permission.READ_EXTERNAL_STORAGE))
+            InitEsSDK();
 
         InitView();
 //        InitSDKManager();
     }
+
+
+    /***
+     * 初始化SDK环境
+     */
+    private void InitEsSDK() {
+        //对SDK进行初始化
+        InitStateCode initCode = EScaleController.GetInstance().Init(this, SpProjectCode);
+        if (initCode != InitStateCode.Succeed)
+            //如果初始化失败,则可能无法正常获取称重重量
+            Toast.makeText(this, "初始化SDK失败,错误码为:" + initCode.toString(), Toast.LENGTH_LONG).show();
+        else
+            isInitFinish = true;
+    }
+
 
     private TextView tv_Weight;
     private FrameLayout fl_CC;
@@ -123,7 +144,43 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         }
     }
 
-    //region 摄像头相关
+    //region 权限请求相关
+
+    /**
+     * 检查是否打开指定权限
+     *
+     * @param isRequestOpenPer
+     * @param permission
+     * @return
+     */
+    private boolean IsThatPermissionsOn(boolean isRequestOpenPer, String permission) {
+
+        if (Build.VERSION.SDK_INT >= 23) {
+            int checkWriteStoragePermission = ContextCompat.checkSelfPermission(this, permission);
+            if (checkWriteStoragePermission != PackageManager.PERMISSION_GRANTED) {
+                if (isRequestOpenPer)
+                    ActivityCompat.requestPermissions(this, new String[]{permission}, 0x114);
+                return false;
+            } else
+                return true;
+
+        } else
+            return true;
+
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == 0x114) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                InitEsSDK();
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    //endregion
+
+    //region 摄像头相关(摄像头操作为普通Android_Camera,可使用其他框架或原生自定义代替)
     //摄像头控件
     private MsCameraSurfaceView iv_Camera;
     //Usb摄像头挂载检测广播
@@ -289,19 +346,25 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
     @Override
     protected void onResume() {
         super.onResume();
-        RegisterUsbCameraBroadcastReceiver();
-        HandleCheckCamera();
-        OpenAndReceiveWeightingData();
+        if (isInitFinish) {
+            RegisterUsbCameraBroadcastReceiver();
+            HandleCheckCamera();
+            OpenAndReceiveWeightingData();
+        }
+
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //关闭接收端口
-        EScaleController.GetInstance().CloseSensor();
-        UnRegisterUsbCameraBroadcastReceiver();
-        //关闭传感器端口
-        EScaleController.GetInstance().CloseSensor();
+        if (isInitFinish) {
+            //关闭接收端口
+            EScaleController.GetInstance().CloseSensor();
+            UnRegisterUsbCameraBroadcastReceiver();
+            //关闭传感器端口
+            EScaleController.GetInstance().CloseSensor();
+        }
+
     }
     //endregion
 
