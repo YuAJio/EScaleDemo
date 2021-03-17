@@ -1,16 +1,14 @@
 package com.mysafe.esdemo;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.BoringLayout;
 import android.util.Log;
@@ -21,42 +19,61 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.mysafe.esdemo.Boradcastes.UsbCameraBroadcastReceiver;
 import com.mysafe.esdemo.Interfaces.IUsbCameraStateCallBck;
+import com.yurishi.camerax.interfaces.ICameraFrameAnalysis;
+import com.yurishi.camerax.interfaces.ITakePictureCallBack;
+import com.yurishi.camerax.views.CameraX;
 
 import java.io.File;
+import java.util.UUID;
 
 import CupCake.EScaleController;
-import CupCake.Enums.CameraInitState;
 import CupCake.Enums.InitStateCode;
-import CupCake.Enums.TakePictureResult;
-import CupCake.Interfaces.IMsUsbCameraCallBack;
-import CupCake.Interfaces.IMsUsbCameraStateCallBack;
 import CupCake.Interfaces.IWeightingDataReceiver;
 import CupCake.Moudle.EScaleData;
-import CupCake.Views.MsCameraSurfaceView;
 
-public class MainActivity extends AppCompatActivity implements IUsbCameraStateCallBck, IMsUsbCameraCallBack {
+public class MainActivity extends AppCompatActivity implements IUsbCameraStateCallBck
+        , ICameraFrameAnalysis, ITakePictureCallBack {
 
     private static final String SpProjectCode = "ESCaleDemo";
+    private static final int PERMISSION_REQUEST_CODE_STORAGE = 0x114;
+    private static final int PERMISSION_REQUEST_CODE_CAMERA = 0x514;
 
     private Boolean isInitFinish = false;
+
+    /**
+     * 防止重复初始化摄像头
+     */
+    private static boolean InitCamera = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //检测是否开启对应权限
-        if (IsThatPermissionsOn(true, Manifest.permission.READ_EXTERNAL_STORAGE))
-            InitEsSDK();
-
         InitView();
+
+        //检测是否开启对应权限
+        if (IsThatPermissionsOn(true, Manifest.permission.READ_EXTERNAL_STORAGE, PERMISSION_REQUEST_CODE_STORAGE))
+            InitEsSDK();
 //        InitSDKManager();
     }
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && !InitCamera)
+            if (IsThatPermissionsOn(true, Manifest.permission.CAMERA, PERMISSION_REQUEST_CODE_CAMERA))
+                HandleCheckCamera();
+    }
 
     /***
      * 初始化SDK环境
@@ -73,14 +90,14 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
 
     private TextView tv_Weight;
-    private FrameLayout fl_CC;
+    private CameraX cx_Camera;
 
     /**
      * 初始化控件
      */
     private void InitView() {
         tv_Weight = findViewById(R.id.tv_WeightNum);
-        fl_CC = findViewById(R.id.fl_CameraCarrier);
+        cx_Camera = findViewById(R.id.cx_Camera);
         Button bt_TIOff = findViewById(R.id.bt_TurnOff);
         Button bt_TIOn = findViewById(R.id.bt_TurnOn);
         Button bt_TakeAShot = findViewById(R.id.bt_TakeAShot);
@@ -105,7 +122,6 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         });
 
     }
-
 
     /**
      * 打开串口,并接收传感器数据
@@ -153,13 +169,13 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
      * @param permission
      * @return
      */
-    private boolean IsThatPermissionsOn(boolean isRequestOpenPer, String permission) {
+    private boolean IsThatPermissionsOn(boolean isRequestOpenPer, String permission, int requestCode) {
 
         if (Build.VERSION.SDK_INT >= 23) {
             int checkWriteStoragePermission = ContextCompat.checkSelfPermission(this, permission);
             if (checkWriteStoragePermission != PackageManager.PERMISSION_GRANTED) {
                 if (isRequestOpenPer)
-                    ActivityCompat.requestPermissions(this, new String[]{permission}, 0x114);
+                    ActivityCompat.requestPermissions(this, new String[]{permission}, requestCode);
                 return false;
             } else
                 return true;
@@ -171,9 +187,15 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == 0x114) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                InitEsSDK();
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            switch (requestCode) {
+                case PERMISSION_REQUEST_CODE_STORAGE:
+                    InitEsSDK();
+                    break;
+                case PERMISSION_REQUEST_CODE_CAMERA:
+                    HandleCheckCamera();
+                    break;
+            }
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
@@ -182,7 +204,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
     //region 摄像头相关(摄像头操作为普通Android_Camera,可使用其他框架或原生自定义代替)
     //摄像头控件
-    private MsCameraSurfaceView iv_Camera;
+    private CameraX _Camera;
     //Usb摄像头挂载检测广播
     private UsbCameraBroadcastReceiver usbCameraBroadcastReceiver;
     //是否存在摄像头
@@ -197,23 +219,66 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         takePictureFilePath = null;
         //获取拍摄后保存地址
         takePictureFilePath = GetPhotoPath();
-        iv_Camera.TakePic(takePictureFilePath);
+        _Camera.TakeAPicture(new File(takePictureFilePath));
     }
 
     /**
-     * 挂载以及初始化摄像头
+     * 初始化以及绑定摄像头的LifeCycle
      */
     private void HandleCheckCamera() {
         if (this.getPackageManager().hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)) {
-            if (iv_Camera != null) {
-                iv_Camera.CleanMCSV_CallBack();
-                fl_CC.removeAllViews();
-                iv_Camera = null;
+            BindCameraXInterface(true);
+            //绑定摄像头,在这之前要先检查是否打开了摄像头权限,如果没有则通知打开
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                cx_Camera.InitAndStartCamera(this, this);
+                InitCamera = true;
             }
-            iv_Camera = new MsCameraSurfaceView(this);
-            iv_Camera.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            iv_Camera.SetMCSV_CallBack(this);
-            fl_CC.addView(iv_Camera);
+        }
+    }
+
+    /**
+     * 摄像头每帧画面回调
+     *
+     * @param imageProxy
+     */
+    @Override
+    public void Analyze(androidx.camera.core.ImageProxy imageProxy) {
+        imageProxy.close();
+    }
+
+    /**
+     * 拍照结果回调_成功
+     *
+     * @param uri 照片保存的地址
+     */
+    @Override
+    public void OnSuccess(Uri uri) {
+        //TODO 处理拍摄好的照片
+
+    }
+
+    /**
+     * 拍照结果回调_失败
+     *
+     * @param e 失败详情
+     */
+    @Override
+    public void OnFailed(androidx.camera.core.ImageCaptureException e) {
+        //TODO 检查拍照异常原因 并处理
+
+    }
+
+
+    /**
+     * 注册或者注销摄像头控件的接口回调(可选)
+     */
+    private void BindCameraXInterface(boolean isBind) {
+        if (isBind) {
+            cx_Camera.SetInterface_CameraFrameAnalysis(this);//摄像头Preview画面的每帧回调
+            cx_Camera.SetInterface_TakePictureCallBack(this);//摄像头拍照结果回调
+        } else {
+            cx_Camera.CancelInterface_CameraFrameAnalysis();
+            cx_Camera.CancelInterface_TakePictureCallBack();
         }
     }
 
@@ -228,7 +293,6 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
     private void UnRegisterUsbCameraBroadcastReceiver() {
         if (usbCameraBroadcastReceiver != null) {
-            iv_Camera.HandleCamera(0);
             usbCameraBroadcastReceiver.CleanCallBack();
             unregisterReceiver(usbCameraBroadcastReceiver);
             usbCameraBroadcastReceiver = null;
@@ -250,7 +314,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
                         + "TestImageDir"
                         + "/";
         if (CreateDir(cachePath)) {
-            return Combine(cachePath, "TestPic.jpg");
+            return Combine(cachePath, "TestPic" + UUID.randomUUID() + ".jpg");
         }
         return "";
     }
@@ -264,7 +328,10 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
     private boolean CreateDir(String path) {
         try {
             File dir = new File(path);
-            return dir.mkdirs();
+            if (!dir.exists())
+                return dir.mkdirs();
+            return
+                    true;
         } catch (Exception ex) {
             return false;
         }
@@ -284,61 +351,14 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         return file2.getPath();
     }
 
-
     /**
-     * @param result
+     * 检测到USB摄像头连接状态改变
+     *
+     * @param intent
      */
     @Override
-    public void TakePictureResultAction(TakePictureResult result) {
-        switch (result) {
-            case None:
-                break;
-            case Fail: {
-                //拍照失败
-            }
-            break;
-            case Exception: {
-                //拍照异常
-            }
-            break;
-            case PicPathNull: {
-                //拍照异常
-            }
-            break;
-            case CameraServiceFail: {
-                //摄像头不存在
-            }
-            break;
-            case Success: {
-                //成功 路径下出现了图片
-                //可直接做保存或上传处理
-                Toast.makeText(this, "照片保存成功", Toast.LENGTH_LONG).show();
-            }
-            break;
-        }
-    }
-
-    @Override
-    public void CameraInitStateAction(CameraInitState state) {
-        switch (state) {
-            case Fail: {
-                //摄像头挂载失败
-                isOpenCamera = false;
-            }
-            break;
-            case Success: {
-                isOpenCamera = true;
-            }
-            break;
-        }
-    }
-
-    @Override
     public void UsbCameraStateAction(Intent intent) {
-        int state = intent.getIntExtra("UsbCameraState", -1);
-
-        if (iv_Camera != null)
-            iv_Camera.HandleCamera(state);
+        //TODO 自行选择处理逻辑
     }
     //endregion
 
@@ -348,7 +368,6 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         super.onResume();
         if (isInitFinish) {
             RegisterUsbCameraBroadcastReceiver();
-            HandleCheckCamera();
             OpenAndReceiveWeightingData();
         }
 
@@ -363,9 +382,12 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
             UnRegisterUsbCameraBroadcastReceiver();
             //关闭传感器端口
             EScaleController.GetInstance().CloseSensor();
+            //解绑摄像头相关接口
+            BindCameraXInterface(false);
         }
 
     }
+
     //endregion
 
     //region 接口实现类
