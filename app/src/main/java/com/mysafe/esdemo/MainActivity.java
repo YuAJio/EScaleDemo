@@ -19,6 +19,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.ContentView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -153,8 +154,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
             }
             break;
             case R.id.bt_TakeAShot: {//拍一张照
-                if (isOpenCamera)
-                    TakePicture();
+                TakePicture();
             }
             break;
         }
@@ -203,12 +203,8 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
     //endregion
 
     //region 摄像头相关(摄像头操作为普通Android_Camera,可使用其他框架或原生自定义代替)
-    //摄像头控件
-    private CameraX _Camera;
     //Usb摄像头挂载检测广播
     private UsbCameraBroadcastReceiver usbCameraBroadcastReceiver;
-    //是否存在摄像头
-    private boolean isOpenCamera;
     //拍摄图片保存路径
     private String takePictureFilePath;
 
@@ -219,7 +215,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         takePictureFilePath = null;
         //获取拍摄后保存地址
         takePictureFilePath = GetPhotoPath();
-        _Camera.TakeAPicture(new File(takePictureFilePath));
+        cx_Camera.TakeAPicture(new File(takePictureFilePath));
     }
 
     /**
@@ -250,22 +246,24 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
      * 拍照结果回调_成功
      *
      * @param uri 照片保存的地址
+     *            (*注意*)
+     *            Uri一般结果将会是Null,只有在ImageCapture.OutputFileOptions中配置了特定参数才会正常返回
+     *            在Uri为空的情况下 图片保存的地址为调用拍照方法时传入的地址↓
+     * @see #takePictureFilePath
      */
     @Override
     public void OnSuccess(Uri uri) {
         //TODO 处理拍摄好的照片
-
     }
 
     /**
      * 拍照结果回调_失败
      *
-     * @param e 失败详情
+     * @param e 失败详情{@link androidx.camera.core.ImageCaptureException}
      */
     @Override
     public void OnFailed(androidx.camera.core.ImageCaptureException e) {
         //TODO 检查拍照异常原因 并处理
-
     }
 
 
