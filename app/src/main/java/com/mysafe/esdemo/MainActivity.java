@@ -21,6 +21,7 @@ import android.widget.Toast;
 
 import androidx.annotation.ContentView;
 import androidx.annotation.NonNull;
+import androidx.annotation.UiThread;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -38,6 +39,7 @@ import java.util.UUID;
 
 import CupCake.EScaleController;
 import CupCake.Enums.InitStateCode;
+import CupCake.Interfaces.IOnHttpResult;
 import CupCake.Interfaces.IWeightingDataReceiver;
 import CupCake.Moudle.EScaleData;
 
@@ -64,7 +66,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
 
         //检测是否开启对应权限
         if (IsThatPermissionsOn(true, Manifest.permission.READ_EXTERNAL_STORAGE, PERMISSION_REQUEST_CODE_STORAGE))
-            InitEsSDK();
+            ActiveEngine();
 //        InitSDKManager();
     }
 
@@ -74,6 +76,31 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         if (hasFocus && !InitCamera)
             if (IsThatPermissionsOn(true, Manifest.permission.CAMERA, PERMISSION_REQUEST_CODE_CAMERA))
                 HandleCheckCamera();
+    }
+
+
+    /**
+     * 激活引擎
+     */
+    private void ActiveEngine() {
+        try {
+            EScaleController.GetInstance().Active("f39a50cf-7571-4f9e-a53c-e474a071abe3", new IOnHttpResult() {
+                @Override
+                public void OnSuccess() {
+                    //激活成功 开始初始化SDK
+                    InitEsSDK();
+                }
+
+                @Override
+                public void OnError(int i, String s) {
+                    //激活失败. i:失败码
+                    Toast.makeText(MainActivity.this, "激活SDK引擎失败,错误码为:" + i, Toast.LENGTH_LONG).show();
+                }
+            });
+        } catch (Exception e) {
+            Log.e("Exception", e.getMessage());
+        }
+
     }
 
     /***
@@ -190,7 +217,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             switch (requestCode) {
                 case PERMISSION_REQUEST_CODE_STORAGE:
-                    InitEsSDK();
+                    ActiveEngine();
                     break;
                 case PERMISSION_REQUEST_CODE_CAMERA:
                     HandleCheckCamera();
