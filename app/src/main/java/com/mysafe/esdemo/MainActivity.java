@@ -1,33 +1,25 @@
 package com.mysafe.esdemo;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Bundle;
-import android.text.BoringLayout;
+import android.os.Environment;
 import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.ContentView;
 import androidx.annotation.NonNull;
-import androidx.annotation.UiThread;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.mysafe.esdemo.Boradcastes.UsbCameraBroadcastReceiver;
 import com.mysafe.esdemo.Interfaces.IUsbCameraStateCallBck;
 import com.yurishi.camerax.interfaces.ICameraFrameAnalysis;
@@ -63,7 +55,6 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
         setContentView(R.layout.activity_main);
 
         InitView();
-
         //检测是否开启对应权限
         if (IsThatPermissionsOn(true, Manifest.permission.READ_EXTERNAL_STORAGE, PERMISSION_REQUEST_CODE_STORAGE))
             ActiveEngine();
@@ -84,9 +75,9 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
      */
     private void ActiveEngine() {
         try {
-            EScaleController.GetInstance().Active("f39a50cf-7571-4f9e-a53c-e474a071abe3", new IOnHttpResult() {
+            EScaleController.GetInstance().Active("cd9de676-4ae6-4886-b83d-9e852b71b4b7", new IOnHttpResult() {
                 @Override
-                public void OnSuccess() {
+                public void OnSuccess(String message) {
                     //激活成功 开始初始化SDK
                     InitEsSDK();
                 }
@@ -94,7 +85,7 @@ public class MainActivity extends AppCompatActivity implements IUsbCameraStateCa
                 @Override
                 public void OnError(int i, String s) {
                     //激活失败. i:失败码
-                    Toast.makeText(MainActivity.this, "激活SDK引擎失败,错误码为:" + i, Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "激活SDK引擎失败,错误码为:" + i + "\n错误信息为:" + s, Toast.LENGTH_LONG).show();
                 }
             });
         } catch (Exception e) {
